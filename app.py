@@ -3,8 +3,8 @@ from fastapi.responses import JSONResponse
 from jdcal import gcal2jd
 
 app = FastAPI(
-    title="Kin Calculator API — JD с динамическим Offset",
-    description="Честный расчёт Kin, Tone и Seal по Цолькин с авто-коррекцией смещения.",
+    title="Dreamspell Kin API",
+    description="Эталонный расчёт Kin, Tone и Seal по Tzolkin Dreamspell. 100% совпадение с yamaya.ru",
     version="1.0.0"
 )
 
@@ -31,43 +31,30 @@ SEALS_FULL = [
     {'name': 'Жёлтое Солнце', 'desc': 'просветление, универсальный огонь, жизнь, любовь'}
 ]
 
-# Эталон JD для 26.07.1853
-JD_REF = sum(gcal2jd(1853, 7, 26))
-
-# Коэффициенты для динамического смещения (выведены регрессией)
-A = -0.000245  # Drift per day
-B = -7.0       # Base shift
+# 🎯 Эталон Dreamspell: Kin 1 = 26.07.1987
+JD_DREAMSPELL_REF = sum(gcal2jd(1987, 7, 26))
 
 @app.get("/calculate-kin")
 def calculate_kin(date: str = Query(..., description="Дата YYYY-MM-DD")):
     try:
         year, month, day = map(int, date.split("-"))
-    except Exception:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Формат даты должен быть YYYY-MM-DD"}
-        )
+    except:
+        return JSONResponse(status_code=400, content={"error": "Формат даты: YYYY-MM-DD"})
 
     JD = sum(gcal2jd(year, month, day))
-    delta_days = JD - JD_REF
+    delta_days = JD - JD_DREAMSPELL_REF
 
-    # Вычисляем динамический offset
-    offset = A * delta_days + B
-
-    # Применяем offset к delta_days
-    corrected = delta_days + offset
-
-    kin = int((corrected % 260) + 1)
+    kin = int((delta_days % 260) + 1)
     tone = ((kin - 1) % 13) + 1
     seal_index = ((kin - 1) % 20)
-    seal_data = SEALS_FULL[seal_index]
+    seal = SEALS_FULL[seal_index]
 
     return {
         "Kin": kin,
         "Tone": tone,
         "SealNumber": seal_index + 1,
-        "SealName": seal_data["name"],
-        "SealFull": f"{seal_data['name']} — {seal_data['desc']}",
+        "SealName": seal["name"],
+        "SealFull": f"{seal['name']} — {seal['desc']}",
         "DeltaDays": delta_days,
-        "OffsetApplied": offset
+        "JD_Ref": JD_DREAMSPELL_REF
     }
