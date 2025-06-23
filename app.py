@@ -1,10 +1,11 @@
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from datetime import datetime
+from jdcal import gcal2jd  # julian day calc
 
 app = FastAPI(
-    title="Kin Calculator API FINAL",
-    description="Честный расчёт Kin, Tone и SealFull по Майянскому Цолькин с динамическим Reference Date.",
+    title="Kin Calculator API — Точное совпадение с yamaya.ru",
+    description="Считает Kin, Tone и Seal по Tzolkin на основе астрономического Julian Day.",
     version="1.0.0"
 )
 
@@ -31,6 +32,9 @@ SEALS_FULL = [
     {'name': 'Жёлтое Солнце', 'desc': 'просветление, универсальный огонь, жизнь, любовь'}
 ]
 
+# Фиксированная опорная дата: 26 июля 1853 — как в yamaya.ru
+JD_REF = sum(gcal2jd(1853, 7, 26))  # Julian Day Number
+
 @app.get("/calculate-kin")
 def calculate_kin(date: str = Query(..., description="Дата рождения в формате YYYY-MM-DD")):
     try:
@@ -41,12 +45,10 @@ def calculate_kin(date: str = Query(..., description="Дата рождения 
             content={"error": "Неверный формат даты. Используй YYYY-MM-DD."}
         )
 
-    # Динамический Reference Date: 26 июля того же года рождения
-      #reference_date = datetime.strptime(f"26.07.{birth_date.year}", "%d.%m.%Y")
-    reference_date = datetime.strptime("26.07.1853", "%d.%m.%Y")
+    jd_birth = sum(gcal2jd(birth_date.year, birth_date.month, birth_date.day))
+    delta_days = int(jd_birth - JD_REF)
 
-    delta_days = (birth_date - reference_date).days
-    kin = ((delta_days % 260 + 260) % 260) + 1
+    kin = ((delta_days % 260) + 1)
     tone = ((kin - 1) % 13) + 1
     seal_index = ((kin - 1) % 20)
     seal_data = SEALS_FULL[seal_index]
