@@ -4,8 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 
 app = FastAPI(
-    title="Kin Proxy API (yamaya.ru парсер)",
-    description="Парсит Kin, Tone и Seal напрямую с yamaya.ru с реальным User-Agent.",
+    title="Kin Proxy API (yamaya.ru Парсер с куками)",
+    description="Делает два запроса: сначала получает сессию, потом парсит результат как браузер.",
     version="1.0.0"
 )
 
@@ -24,20 +24,32 @@ def calculate_kin(
             content={"error": "Неверный формат даты. Используй YYYY-MM-DD."}
         )
 
-    url = (
-        f"https://yamaya.ru/maya/choosedate/"
-        f"?action=setOwnDate&formday={day}&formmonth={month}&formyear={year}"
-    )
+    url_base = "https://yamaya.ru/maya/choosedate/"
+    params = {
+        "action": "setOwnDate",
+        "formday": day,
+        "formmonth": month,
+        "formyear": year
+    }
 
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/124.0.0.0 Safari/537.36"
-        )
+        ),
+        "Referer": "https://yamaya.ru/maya/choosedate/"
     }
 
-    r = requests.get(url, headers=headers)
+    # 1️⃣ Открыть сессию и получить куку
+    s = requests.Session()
+    s.headers.update(headers)
+
+    # 1й запрос - инициируем сессию
+    s.get(url_base)
+
+    # 2й запрос - получаем результат с теми же куками и Referer
+    r = s.get(url_base, params=params)
     if r.status_code != 200:
         return JSONResponse(
             status_code=500,
@@ -46,13 +58,13 @@ def calculate_kin(
 
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # Визуально проверено: контент лежит внутри <div class="pageContent">
     try:
-        main_div = soup.find("div", {"class": "pageContent"})
+        # Проверено руками: результат часто внутри .mayaRes
+        main_div = soup.find("div", {"class": "mayaRes"})
         if not main_div:
             return JSONResponse(
                 status_code=500,
-                content={"error": "Не найден блок с результатом (pageContent) на yamaya.ru"}
+                content={"error": "Не найден блок mayaRes на yamaya.ru"}
             )
 
         text = main_div.get_text(separator="\n").strip()
@@ -75,14 +87,14 @@ def calculate_kin(
                 "Kin": kin,
                 "Tone": tone,
                 "Seal": seal,
-                "source": url
+                "source": r.url
             }
         else:
             return JSONResponse(
                 status_code=500,
                 content={
                     "error": f"Не удалось распарсить результат. Найдено: Kin={kin}, Tone={tone}, Seal={seal}",
-                    "debug_html_sample": text[:500]  # чтобы ты видел кусок HTML!
+                    "debug_html_sample": text[:500]
                 }
             )
 
