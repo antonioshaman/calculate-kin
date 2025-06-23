@@ -43,7 +43,7 @@ def calculate_kin(date: str = Query(..., description="Дата рождения 
 
     # Динамический Reference Date: 26 июля того же года рождения
       #reference_date = datetime.strptime(f"26.07.{birth_date.year}", "%d.%m.%Y")
-    REFERENCE_DATE = datetime.strptime("26.07.1952", "%d.%m.%Y")
+    reference_date = datetime.strptime("26.07.1952", "%d.%m.%Y")
 
     delta_days = (birth_date - reference_date).days
     kin = ((delta_days % 260 + 260) % 260) + 1
