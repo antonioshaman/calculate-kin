@@ -4,8 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 
 app = FastAPI(
-    title="Kin Proxy API (yamaya.ru Парсер с куками)",
-    description="Делает два запроса: сначала получает сессию, потом парсит результат как браузер.",
+    title="Kin Proxy API — парсер yamaya.ru (bulletproof)",
+    description="Делает два запроса: получает сессию и парсит всё по паттерну, без привязки к CSS.",
     version="1.0.0"
 )
 
@@ -24,7 +24,7 @@ def calculate_kin(
             content={"error": "Неверный формат даты. Используй YYYY-MM-DD."}
         )
 
-    url_base = "https://yamaya.ru/maya/choosedate/"
+    base_url = "https://yamaya.ru/maya/choosedate/"
     params = {
         "action": "setOwnDate",
         "formday": day,
@@ -41,15 +41,14 @@ def calculate_kin(
         "Referer": "https://yamaya.ru/maya/choosedate/"
     }
 
-    # 1️⃣ Открыть сессию и получить куку
     s = requests.Session()
     s.headers.update(headers)
 
-    # 1й запрос - инициируем сессию
-    s.get(url_base)
+    # Инициализируем сессию для PHPSESSID
+    s.get(base_url)
 
-    # 2й запрос - получаем результат с теми же куками и Referer
-    r = s.get(url_base, params=params)
+    # Второй запрос с куками
+    r = s.get(base_url, params=params)
     if r.status_code != 200:
         return JSONResponse(
             status_code=500,
@@ -59,15 +58,8 @@ def calculate_kin(
     soup = BeautifulSoup(r.text, "html.parser")
 
     try:
-        # Проверено руками: результат часто внутри .mayaRes
-        main_div = soup.find("div", {"class": "mayaRes"})
-        if not main_div:
-            return JSONResponse(
-                status_code=500,
-                content={"error": "Не найден блок mayaRes на yamaya.ru"}
-            )
-
-        text = main_div.get_text(separator="\n").strip()
+        # Новый способ: найти весь текст, где есть "Кин:"
+        text = soup.get_text(separator="\n").strip()
         lines = [line.strip() for line in text.splitlines() if line.strip()]
 
         kin = None
@@ -90,11 +82,12 @@ def calculate_kin(
                 "source": r.url
             }
         else:
+            # Debug: покажи первые 800 символов всего HTML
             return JSONResponse(
                 status_code=500,
                 content={
                     "error": f"Не удалось распарсить результат. Найдено: Kin={kin}, Tone={tone}, Seal={seal}",
-                    "debug_html_sample": text[:500]
+                    "debug_html_sample": r.text[:800]
                 }
             )
 
