@@ -38,36 +38,45 @@ def calculate_kin(
 
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # Найти блок с Кином
     try:
-        text = soup.get_text()
-        lines = text.splitlines()
+        # Найди весь блок с результатом
+        main_div = soup.find("div", {"id": "rightContent"})
+        if not main_div:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Не найден блок с результатом на yamaya.ru"}
+            )
+
+        text = main_div.get_text(separator="\n").strip()
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        
         kin = None
         tone = None
         seal = None
-        for line in lines:
-            if line.strip().startswith("Кин:"):
-                kin = line.strip().replace("Кин:", "").strip()
-            if line.strip().startswith("Печать:"):
-                seal = line.strip().replace("Печать:", "").strip()
-            if line.strip().startswith("Тон:"):
-                tone = line.strip().replace("Тон:", "").strip()
 
-        if kin and seal and tone:
+        for line in lines:
+            if line.startswith("Кин:"):
+                kin = line.replace("Кин:", "").strip()
+            elif line.startswith("Тон:"):
+                tone = line.replace("Тон:", "").strip()
+            elif line.startswith("Печать:"):
+                seal = line.replace("Печать:", "").strip()
+
+        if kin and tone and seal:
             return {
                 "Kin": kin,
-                "Seal": seal,
                 "Tone": tone,
+                "Seal": seal,
                 "source": url
             }
         else:
             return JSONResponse(
                 status_code=500,
-                content={"error": "Не удалось распарсить ответ yamaya.ru"}
+                content={"error": f"Не удалось распарсить результат. Найдено: Kin={kin}, Tone={tone}, Seal={seal}"}
             )
 
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"error": str(e)}
+            content={"error": f"Ошибка парсинга: {str(e)}"}
         )
