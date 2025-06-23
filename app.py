@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 
 app = FastAPI(
     title="Kin Proxy API (yamaya.ru парсер)",
-    description="Парсит Kin, Tone и Seal напрямую с yamaya.ru для 100% совпадения.",
+    description="Парсит Kin, Tone и Seal напрямую с yamaya.ru с реальным User-Agent.",
     version="1.0.0"
 )
 
@@ -29,7 +29,15 @@ def calculate_kin(
         f"?action=setOwnDate&formday={day}&formmonth={month}&formyear={year}"
     )
 
-    r = requests.get(url)
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        )
+    }
+
+    r = requests.get(url, headers=headers)
     if r.status_code != 200:
         return JSONResponse(
             status_code=500,
@@ -38,18 +46,18 @@ def calculate_kin(
 
     soup = BeautifulSoup(r.text, "html.parser")
 
+    # Визуально проверено: контент лежит внутри <div class="pageContent">
     try:
-        # Найди весь блок с результатом
-        main_div = soup.find("div", {"id": "rightContent"})
+        main_div = soup.find("div", {"class": "pageContent"})
         if not main_div:
             return JSONResponse(
                 status_code=500,
-                content={"error": "Не найден блок с результатом на yamaya.ru"}
+                content={"error": "Не найден блок с результатом (pageContent) на yamaya.ru"}
             )
 
         text = main_div.get_text(separator="\n").strip()
         lines = [line.strip() for line in text.splitlines() if line.strip()]
-        
+
         kin = None
         tone = None
         seal = None
@@ -72,7 +80,10 @@ def calculate_kin(
         else:
             return JSONResponse(
                 status_code=500,
-                content={"error": f"Не удалось распарсить результат. Найдено: Kin={kin}, Tone={tone}, Seal={seal}"}
+                content={
+                    "error": f"Не удалось распарсить результат. Найдено: Kin={kin}, Tone={tone}, Seal={seal}",
+                    "debug_html_sample": text[:500]  # чтобы ты видел кусок HTML!
+                }
             )
 
     except Exception as e:
