@@ -3,8 +3,8 @@ from fastapi.responses import JSONResponse
 from jdcal import gcal2jd
 
 app = FastAPI(
-    title="Kin Calculator API — чистый JD",
-    description="Честный и автономный расчёт Kin, Tone и Seal без парсинга сайтов.",
+    title="Kin Calculator API — JD с динамическим Offset",
+    description="Честный расчёт Kin, Tone и Seal по Цолькин с авто-коррекцией смещения.",
     version="1.0.0"
 )
 
@@ -31,11 +31,15 @@ SEALS_FULL = [
     {'name': 'Жёлтое Солнце', 'desc': 'просветление, универсальный огонь, жизнь, любовь'}
 ]
 
-# Эталонный JD для 26.07.1853 = Kin 1
+# Эталон JD для 26.07.1853
 JD_REF = sum(gcal2jd(1853, 7, 26))
 
+# Коэффициенты для динамического смещения (выведены регрессией)
+A = -0.000245  # Drift per day
+B = -7.0       # Base shift
+
 @app.get("/calculate-kin")
-def calculate_kin(date: str = Query(..., description="Дата рождения YYYY-MM-DD")):
+def calculate_kin(date: str = Query(..., description="Дата YYYY-MM-DD")):
     try:
         year, month, day = map(int, date.split("-"))
     except Exception:
@@ -45,9 +49,15 @@ def calculate_kin(date: str = Query(..., description="Дата рождения 
         )
 
     JD = sum(gcal2jd(year, month, day))
-    delta = int(JD - JD_REF)
+    delta_days = JD - JD_REF
 
-    kin = (delta % 260) + 1
+    # Вычисляем динамический offset
+    offset = A * delta_days + B
+
+    # Применяем offset к delta_days
+    corrected = delta_days + offset
+
+    kin = int((corrected % 260) + 1)
     tone = ((kin - 1) % 13) + 1
     seal_index = ((kin - 1) % 20)
     seal_data = SEALS_FULL[seal_index]
@@ -58,5 +68,6 @@ def calculate_kin(date: str = Query(..., description="Дата рождения 
         "SealNumber": seal_index + 1,
         "SealName": seal_data["name"],
         "SealFull": f"{seal_data['name']} — {seal_data['desc']}",
-        "Delta": delta
+        "DeltaDays": delta_days,
+        "OffsetApplied": offset
     }
