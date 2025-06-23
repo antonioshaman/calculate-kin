@@ -4,8 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 
 app = FastAPI(
-    title="Kin Proxy API — yamaya.ru bulletproof c windows-1251",
-    description="Делает два запроса, устанавливает правильную кодировку и парсит всегда правильно.",
+    title="Kin Proxy API — yamaya.ru bulletproof POST",
+    description="Эмулирует форму yamaya.ru POST для гарантированного расчёта.",
     version="1.0.0"
 )
 
@@ -25,40 +25,45 @@ def calculate_kin(
         )
 
     base_url = "https://yamaya.ru/maya/choosedate/"
-    params = {
-        "action": "setOwnDate",
-        "formday": day,
-        "formmonth": month,
-        "formyear": year
-    }
-
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/124.0.0.0 Safari/537.36"
         ),
-        "Referer": "https://yamaya.ru/maya/choosedate/"
+        "Referer": base_url
     }
 
     s = requests.Session()
     s.headers.update(headers)
 
-    # Инициализируем сессию
-    s.get(base_url)
-
-    # Второй запрос
-    r = s.get(base_url, params=params)
-    if r.status_code != 200:
+    # 1️⃣ Первый GET — получить форму и куки
+    r1 = s.get(base_url)
+    if r1.status_code != 200:
         return JSONResponse(
             status_code=500,
-            content={"error": f"yamaya.ru не ответил. Код: {r.status_code}"}
+            content={"error": f"yamaya.ru не ответил (GET). Код: {r1.status_code}"}
         )
 
-    # 💎 КЛЮЧЕВОЙ ФИКС: правильно декодируем windows-1251
-    r.encoding = "windows-1251"
+    # 2️⃣ Отправляем реальный POST как форма
+    payload = {
+        "action": "setOwnDate",
+        "formday": day,
+        "formmonth": month,
+        "formyear": year,
+        "submit": "OK"
+    }
 
-    soup = BeautifulSoup(r.text, "html.parser")
+    r2 = s.post(base_url, data=payload)
+    if r2.status_code != 200:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"yamaya.ru не ответил (POST). Код: {r2.status_code}"}
+        )
+
+    r2.encoding = "windows-1251"
+
+    soup = BeautifulSoup(r2.text, "html.parser")
 
     try:
         text = soup.get_text(separator="\n").strip()
@@ -81,7 +86,7 @@ def calculate_kin(
                 "Kin": kin,
                 "Tone": tone,
                 "Seal": seal,
-                "source": r.url
+                "source": r2.url
             }
         else:
             return JSONResponse(
