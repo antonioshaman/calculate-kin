@@ -4,8 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 
 app = FastAPI(
-    title="Kin Proxy API — парсер yamaya.ru (bulletproof)",
-    description="Делает два запроса: получает сессию и парсит всё по паттерну, без привязки к CSS.",
+    title="Kin Proxy API — yamaya.ru bulletproof c windows-1251",
+    description="Делает два запроса, устанавливает правильную кодировку и парсит всегда правильно.",
     version="1.0.0"
 )
 
@@ -44,10 +44,10 @@ def calculate_kin(
     s = requests.Session()
     s.headers.update(headers)
 
-    # Инициализируем сессию для PHPSESSID
+    # Инициализируем сессию
     s.get(base_url)
 
-    # Второй запрос с куками
+    # Второй запрос
     r = s.get(base_url, params=params)
     if r.status_code != 200:
         return JSONResponse(
@@ -55,10 +55,12 @@ def calculate_kin(
             content={"error": f"yamaya.ru не ответил. Код: {r.status_code}"}
         )
 
+    # 💎 КЛЮЧЕВОЙ ФИКС: правильно декодируем windows-1251
+    r.encoding = "windows-1251"
+
     soup = BeautifulSoup(r.text, "html.parser")
 
     try:
-        # Новый способ: найти весь текст, где есть "Кин:"
         text = soup.get_text(separator="\n").strip()
         lines = [line.strip() for line in text.splitlines() if line.strip()]
 
@@ -82,12 +84,11 @@ def calculate_kin(
                 "source": r.url
             }
         else:
-            # Debug: покажи первые 800 символов всего HTML
             return JSONResponse(
                 status_code=500,
                 content={
                     "error": f"Не удалось распарсить результат. Найдено: Kin={kin}, Tone={tone}, Seal={seal}",
-                    "debug_html_sample": r.text[:800]
+                    "debug_html_sample": text[:800]
                 }
             )
 
