@@ -1,10 +1,10 @@
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
-from datetime import datetime
+from jdcal import gcal2jd
 
 app = FastAPI(
-    title="Mayan Calendar API — Long Count + Tzolkin",
-    description="Честный и традиционный расчёт Mayan Long Count и Tzolkin Kin.",
+    title="Mayan Kin API — GMT correlation",
+    description="Честный Mayan Long Count и Tzolkin на официальной константе GMT correlation (Julian Day 584283).",
     version="1.0.0"
 )
 
@@ -31,19 +31,18 @@ SEALS_FULL = [
     {'name': 'Жёлтое Солнце', 'desc': 'просветление, универсальный огонь, жизнь, любовь'}
 ]
 
-# Mayan Long Count стартует 11 августа 3114 BCE (GMT correlation)
-MAYAN_EPOCH = datetime(-3113, 8, 11)  # в Python нет года 0, поэтому -3113
+# 🎯 Официальный GMT correlation (JD)
+MAYAN_EPOCH_JD = 584283  # Julian Day Number
 
 @app.get("/calculate-kin")
 def calculate_kin(date: str = Query(..., description="Дата YYYY-MM-DD")):
     try:
-        year, month, day = map(int, date.split("-"))
-        date_obj = datetime(year, month, day)
+        y, m, d = map(int, date.split("-"))
     except:
         return JSONResponse(status_code=400, content={"error": "Формат даты: YYYY-MM-DD"})
 
-    # Разница дней с эпохой
-    delta_days = (date_obj - MAYAN_EPOCH).days
+    jd = sum(gcal2jd(y, m, d))
+    delta_days = int(jd - MAYAN_EPOCH_JD)
 
     # Long Count
     baktun = delta_days // 144000
